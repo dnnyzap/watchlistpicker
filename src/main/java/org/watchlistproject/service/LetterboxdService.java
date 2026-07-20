@@ -6,51 +6,72 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Random;
 
 @Service
 public class LetterboxdService {
 
     public Filme sortear(String user) {
-        List<Filme> allMovies = new ArrayList<>();
-        int atualPage = 1;
-        boolean moreMovies = true;
-
         try {
-            while(moreMovies) {
-                String urlPage = "https://letterboxd.com/" + user + "/watchlist/page/" + atualPage + "/";
+            String baseUrl = "https://letterboxd.com/" + user + "/watchlist/page/";
 
-                Document document = Jsoup.connect(urlPage).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
+            Document firstPage = Jsoup.connect(baseUrl + "1/").userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
 
-                Elements divPostereses = document.select(".film-poster");
+            Elements divPostereses = firstPage.select("div.film-poster");
 
-                if (divPostereses.isEmpty()) {
-                    moreMovies = false;
-                } else {
-                    for (Element div : divPostereses) {
-                        String titulo = div.select("img").attr("alt");
+            if (divPostereses.isEmpty()) {
+                throw new RuntimeException("Nenhum filme encontrado para o usuário: " + user);
+            }
 
-                        if (!titulo.isEmpty()) {
-                            String slug = titulo.toLowerCase().replace(" ", "-").replace("[^a-zA-Z0-9-]", "");
-                            String completeLink = "https://letterboxd.com/film/" + slug + "/";
-                            allMovies.add(new Filme(titulo, completeLink));
+            int allPages = 1;
+            Elements pagination = firstPage.select("div.paginate-pages a.paginate-page");
+
+            if (!pagination.isEmpty()) {
+                String lastPageStr = pagination.last().text();
+                allPages = Integer.parseInt(lastPageStr.replace(",", ""));
+            }
+            Random random = new Random();
+            int randomPage = random.nextInt(allPages) + 1;
+
+            Elements selectedPosters;
+
+            if (randomPage == 1) {
+                selectedPosters = divPostereses;
+            } else {
+                Document specificPage = Jsoup.connect(baseUrl + randomPage + "/").userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
+                selectedPosters = specificPage.select(".film-poster");
+            }
+
+            Element selectedDiv = selectedPosters.get(random.nextInt(selectedPosters.size()));
+            String title = selectedDiv.select("img").attr("alt");
+
+            if (!title.isEmpty()) {
+                String slug = title.toLowerCase().replace(" ", "-").replaceAll("[^a-zA-Z0-9-]", "");
+                String completeLink = "https://letterboxd.com/film/" + slug + "/";
+
+                Document moviePage = Jsoup.connect(completeLink).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
+
+                String posterUrl = "";
+
+                Element posterDiv = moviePage.selectFirst("div.film-poster");
+                if (posterDiv != null) {
+                    Element img = posterDiv.selectFirst("img");
+                    if (img != null) {
+                        posterUrl = img.attr("src");
 
                         }
                     }
-                    atualPage++;
-                    Thread.sleep(500);
+                if (posterUrl.isEmpty() || posterUrl.contains("empty-poster")) {
+                    Element metaImage = moviePage.selectFirst("meta[property=og:image]");
+                    if (metaImage != null) {
+                        posterUrl = metaImage.attr("content");
+                    }
                 }
 
 
-            }
-            if (!allMovies.isEmpty()) {
-                Random random = new Random();
-                return allMovies.get(random.nextInt(allMovies.size()));
+                return new Filme(title, completeLink, posterUrl);
             } else {
-                throw new RuntimeException("Nenhum filme encontrado na watchlist do usuário: " + user);
+                throw new RuntimeException("Erro ao acessar a watchlist: Título do filme não encontrado.");
             }
         } catch (Exception e) {
             throw new RuntimeException("Erro ao acessar a watchlist: " + e.getMessage());
