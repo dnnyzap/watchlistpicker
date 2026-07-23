@@ -6,6 +6,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
+
 import java.util.Random;
 
 @Service
@@ -46,8 +47,16 @@ public class LetterboxdService {
             String title = selectedDiv.select("img").attr("alt");
 
             if (!title.isEmpty()) {
-                String slug = title.toLowerCase().replace(" ", "-").replaceAll("[^a-zA-Z0-9-]", "");
-                String completeLink = "https://letterboxd.com/film/" + slug + "/";
+                String slug = selectedDiv.attr("data-film-slug");
+                String completeLink = "";
+
+                if (slug != null && !slug.isEmpty()) {
+                    completeLink = "https://letterboxd.com/film/" + slug + "/";
+                } else {
+                    
+                    String fallbackSlug = title.toLowerCase().replace(" ", "-").replaceAll("[^a-zA-Z0-9-]", "");
+                    completeLink = "https://letterboxd.com/film/" + fallbackSlug + "/";
+                }
 
                 Document moviePage = Jsoup.connect(completeLink).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
 
