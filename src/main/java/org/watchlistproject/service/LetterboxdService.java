@@ -1,16 +1,24 @@
 package org.watchlistproject.service;
 
+import org.springframework.http.ResponseEntity;
 import org.watchlistproject.model.Filme;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
 @Service
 public class LetterboxdService {
+
+    private final String TMBD_API_KEY = "d623267b98594bfa0000765419ac6de8";
 
     public Filme sortear(String user) {
         try {
@@ -53,32 +61,47 @@ public class LetterboxdService {
                 if (slug != null && !slug.isEmpty()) {
                     completeLink = "https://letterboxd.com/film/" + slug + "/";
                 } else {
-                    
+
                     String fallbackSlug = title.toLowerCase().replace(" ", "-").replaceAll("[^a-zA-Z0-9-]", "");
                     completeLink = "https://letterboxd.com/film/" + fallbackSlug + "/";
                 }
-
+                String bannerUrl = "";
                 Document moviePage = Jsoup.connect(completeLink).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
 
                 String posterUrl = "";
+                try {
+                    RestTemplate restTemplate = new RestTemplate();
+                    String encodedTitle = URLEncoder.encode(title, StandardCharsets.UTF_8.toString());
+                    String tmdbUrl = "https://api.themoviedb.org/3/search/movie?api_key=" + TMBD_API_KEY + "&query=" + encodedTitle;
 
-                Element posterDiv = moviePage.selectFirst("div.film-poster");
-                if (posterDiv != null) {
-                    Element img = posterDiv.selectFirst("img");
-                    if (img != null) {
-                        posterUrl = img.attr("src");
+                    ResponseEntity<String> response = restTemplate.getForEntity(tmdbUrl, String.class);
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode root = mapper.readTree(response.getBody());
 
+                    if (root != null && root.has("results") && root.get("results").size() > 0) {
+                        JsonNode firstResult = root.get("results").get(0);
+
+                        if (firstResult.has("poster_path") && !firstResult.get("poster_path").isNull()) {
+                            String posterPath = firstResult.get("poster_path").asText();
+                            posterUrl = "https://image.tmdb.org/t/p/w500" + posterPath;
+                        }
+
+                        if (firstResult.has("backdrop_path") && !firstResult.get("backdrop_path").isNull()) {
+                            bannerUrl = "https://image.tmdb.org/t/p/w1280" + firstResult.get("backdrop_path").asText();
                         }
                     }
-                if (posterUrl.isEmpty() || posterUrl.contains("empty-poster")) {
-                    Element metaImage = moviePage.selectFirst("meta[property=og:image]");
-                    if (metaImage != null) {
-                        posterUrl = metaImage.attr("content");
-                    }
+                } catch (Exception e) {
+                    System.out.println("Aviso: Erro ao buscar o poster do filme no TMDB: " + e.getMessage() );
                 }
 
+                if (bannerUrl == null || bannerUrl.isEmpty()) {
+                    bannerUrl = posterUrl;
+                }
+                if (posterUrl == null || posterUrl.isEmpty()) {
+                    posterUrl = bannerUrl;
+                }
 
-                return new Filme(title, completeLink, posterUrl);
+                return new Filme(title, completeLink, posterUrl, bannerUrl);
             } else {
                 throw new RuntimeException("Erro ao acessar a watchlist: Título do filme não encontrado.");
             }

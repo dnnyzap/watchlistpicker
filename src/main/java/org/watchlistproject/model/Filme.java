@@ -1,3 +1,3 @@
 package org.watchlistproject.model;
 
-public record Filme(String titulo, String url, String posterUrl) { }
+public record Filme(String titulo, String url, String posterUrl, String bannerUrl) { }
