@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +19,8 @@ import java.util.Random;
 @Service
 public class LetterboxdService {
 
-    private final String TMBD_API_KEY = "d623267b98594bfa0000765419ac6de8";
+    @Value("${tmdb.api.key}")
+    private String tmdmApiKey;
 
     public Filme sortear(String user) {
         try {
@@ -72,7 +74,7 @@ public class LetterboxdService {
                 try {
                     RestTemplate restTemplate = new RestTemplate();
                     String encodedTitle = URLEncoder.encode(title, StandardCharsets.UTF_8.toString());
-                    String tmdbUrl = "https://api.themoviedb.org/3/search/movie?api_key=" + TMBD_API_KEY + "&query=" + encodedTitle;
+                    String tmdbUrl = "https://api.themoviedb.org/3/search/movie?api_key=" + tmdmApiKey + "&query=" + encodedTitle;
 
                     ResponseEntity<String> response = restTemplate.getForEntity(tmdbUrl, String.class);
                     ObjectMapper mapper = new ObjectMapper();
