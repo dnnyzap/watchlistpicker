@@ -1,16 +1,18 @@
 package org.watchlistproject.service;
 
-import org.springframework.http.ResponseEntity;
-import org.watchlistproject.model.Filme;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
+import org.watchlistproject.model.Filme;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -19,19 +21,22 @@ import java.util.Random;
 @Service
 public class LetterboxdService {
 
-    @Value("${tmdb.api.key}")
-    private String tmdmApiKey;
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
+    private static final int REQUEST_TIMEOUT_MILLIS = 10000;
+
+    @Value("${tmdb.api.key:${TMDB_API_KEY:}}")
+    private String tmdbApiKey;
 
     public Filme sortear(String user) {
         try {
-            String baseUrl = "https://letterboxd.com/" + user + "/watchlist/page/";
+            String sanitizedUser = validarUsuario(user);
+            String baseUrl = "https://letterboxd.com/" + sanitizedUser + "/watchlist/page/";
 
-            Document firstPage = Jsoup.connect(baseUrl + "1/").userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
-
+            Document firstPage = conectar(baseUrl + "1/").get();
             Elements divPostereses = firstPage.select("div.film-poster");
 
             if (divPostereses.isEmpty()) {
-                throw new RuntimeException("Nenhum filme encontrado para o usuário: " + user);
+                throw new RuntimeException("Nenhum filme encontrado para o usuario: " + sanitizedUser);
             }
 
             int allPages = 1;
@@ -41,16 +46,20 @@ public class LetterboxdService {
                 String lastPageStr = pagination.last().text();
                 allPages = Integer.parseInt(lastPageStr.replace(",", ""));
             }
+
             Random random = new Random();
             int randomPage = random.nextInt(allPages) + 1;
-
             Elements selectedPosters;
 
             if (randomPage == 1) {
                 selectedPosters = divPostereses;
             } else {
-                Document specificPage = Jsoup.connect(baseUrl + randomPage + "/").userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
+                Document specificPage = conectar(baseUrl + randomPage + "/").get();
                 selectedPosters = specificPage.select(".film-poster");
+            }
+
+            if (selectedPosters.isEmpty()) {
+                throw new RuntimeException("Nenhum filme encontrado na pagina sorteada.");
             }
 
             Element selectedDiv = selectedPosters.get(random.nextInt(selectedPosters.size()));
@@ -58,23 +67,26 @@ public class LetterboxdService {
 
             if (!title.isEmpty()) {
                 String slug = selectedDiv.attr("data-film-slug");
-                String completeLink = "";
+                String completeLink;
 
                 if (slug != null && !slug.isEmpty()) {
                     completeLink = "https://letterboxd.com/film/" + slug + "/";
                 } else {
-
                     String fallbackSlug = title.toLowerCase().replace(" ", "-").replaceAll("[^a-zA-Z0-9-]", "");
                     completeLink = "https://letterboxd.com/film/" + fallbackSlug + "/";
                 }
-                String bannerUrl = "";
-                Document moviePage = Jsoup.connect(completeLink).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").get();
 
                 String posterUrl = "";
+                String bannerUrl = "";
+
                 try {
-                    RestTemplate restTemplate = new RestTemplate();
+                    if (tmdbApiKey == null || tmdbApiKey.isBlank()) {
+                        throw new IllegalStateException("Chave TMDB nao configurada.");
+                    }
+
+                    RestTemplate restTemplate = criarRestTemplate();
                     String encodedTitle = URLEncoder.encode(title, StandardCharsets.UTF_8.toString());
-                    String tmdbUrl = "https://api.themoviedb.org/3/search/movie?api_key=" + tmdmApiKey + "&query=" + encodedTitle;
+                    String tmdbUrl = "https://api.themoviedb.org/3/search/movie?api_key=" + tmdbApiKey + "&query=" + encodedTitle;
 
                     ResponseEntity<String> response = restTemplate.getForEntity(tmdbUrl, String.class);
                     ObjectMapper mapper = new ObjectMapper();
@@ -93,7 +105,7 @@ public class LetterboxdService {
                         }
                     }
                 } catch (Exception e) {
-                    System.out.println("Aviso: Erro ao buscar o poster do filme no TMDB: " + e.getMessage() );
+                    System.out.println("Aviso: Erro ao buscar o poster do filme no TMDB: " + e.getMessage());
                 }
 
                 if (bannerUrl == null || bannerUrl.isEmpty()) {
@@ -105,10 +117,31 @@ public class LetterboxdService {
 
                 return new Filme(title, completeLink, posterUrl, bannerUrl);
             } else {
-                throw new RuntimeException("Erro ao acessar a watchlist: Título do filme não encontrado.");
+                throw new RuntimeException("Erro ao acessar a watchlist: titulo do filme nao encontrado.");
             }
         } catch (Exception e) {
             throw new RuntimeException("Erro ao acessar a watchlist: " + e.getMessage());
         }
+    }
+
+    private String validarUsuario(String user) {
+        if (user == null || !user.trim().matches("[A-Za-z0-9_-]+")) {
+            throw new IllegalArgumentException("Usuario invalido.");
+        }
+
+        return user.trim();
+    }
+
+    private Connection conectar(String url) {
+        return Jsoup.connect(url)
+                .userAgent(USER_AGENT)
+                .timeout(REQUEST_TIMEOUT_MILLIS);
+    }
+
+    private RestTemplate criarRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(REQUEST_TIMEOUT_MILLIS);
+        factory.setReadTimeout(REQUEST_TIMEOUT_MILLIS);
+        return new RestTemplate(factory);
     }
 }
