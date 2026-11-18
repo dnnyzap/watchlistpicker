@@ -1,0 +1,14 @@
+# Blueprint da Render: cria o backend no plano gratis.
+# https://render.com/deploy?repo=https://github.com/dnnyzap/watchlistpicker
+services:
+  - type: web
+    name: watchlist-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: TMDB_API_KEY
+        sync: false # a Render pede o valor na hora de criar
