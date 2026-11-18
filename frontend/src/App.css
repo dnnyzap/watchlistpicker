@@ -1,0 +1,22 @@
+.app { width: 100%; min-height: 100vh; display: flex; flex-direction: column; }
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; justify-content: center; gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(10,10,10,0.8);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.nav button {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.9rem; font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.nav button:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
+.nav button.ativo { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+.main { flex: 1; padding-top: 60px; }
