@@ -20,3 +20,54 @@
 .nav button:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
 .nav button.ativo { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
 .main { flex: 1; padding-top: 60px; }
+.servidor-aviso {
+  position: fixed; left: 50%; bottom: 1rem; z-index: 200;
+  transform: translateX(-50%);
+  width: max-content; max-width: calc(100% - 2rem);
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(20,20,28,0.95);
+  border: 1px solid rgba(102,126,234,0.35);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.85rem; line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.servidor-aviso.erro { border-color: rgba(255,71,87,0.4); color: #ff6b6b; }
+.servidor-spinner {
+  flex: none; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: #667eea;
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.rodape {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  font-size: 0.75rem; line-height: 1.6;
+  color: rgba(255,255,255,0.35);
+  background: #0a0a0a;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.rodape a { color: rgba(255,255,255,0.6); }
+
+/* Atalhos abaixo do formulario: usuario de exemplo e dados de exemplo */
+.atalhos { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 1.25rem; font-size: 0.85rem; }
+.atalho {
+  border: none; background: none; padding: 0;
+  color: rgba(255,255,255,0.6);
+  font: inherit;
+  text-decoration: underline; text-underline-offset: 3px;
+  cursor: pointer;
+}
+.atalho:hover:not(:disabled) { color: #fff; }
+.atalho:disabled { opacity: 0.5; cursor: not-allowed; }
+.selo-demo {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(245,196,81,0.12);
+  color: #f5c451;
+  font-size: 0.75rem; font-weight: 600;
+}

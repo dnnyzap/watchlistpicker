@@ -11,9 +11,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
@@ -26,11 +27,18 @@ public class TmdbService {
     private static final Logger log = LoggerFactory.getLogger(TmdbService.class);
     private static final String POSTER = "https://image.tmdb.org/t/p/w500";
     private static final String BANNER = "https://image.tmdb.org/t/p/w1280";
+    private static final int LIMITE_CACHE = 5_000;
 
     private final RestClient client;
     private final String apiKey;
     private final boolean usaToken;
-    private final Map<String, Imagens> cache = new ConcurrentHashMap<>();
+    /** Cache com limite (descarta o menos usado), para a memoria nao crescer sem fim no servidor. */
+    private final Map<String, Imagens> cache = Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Imagens> maisAntigo) {
+            return size() > LIMITE_CACHE;
+        }
+    });
     /** O TMDB limita requisicoes por segundo; o diario do ano pode pedir centenas de uma vez. */
     private final Semaphore simultaneas = new Semaphore(8);
 

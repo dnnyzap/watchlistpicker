@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Sorteador from './components/Sorteador';
 import Diario from './components/Diario';
 import { useUsuario } from './hooks/useUsuario';
+import { useServidor } from './hooks/useServidor';
 import './App.css';
 
 const ABAS = [
@@ -13,6 +14,7 @@ const ABAS = [
 export default function App() {
   const [aba, setAba] = useState('watchlist');
   const [user, setUser] = useUsuario();
+  const servidor = useServidor();
 
   return (
     <div className="app">
@@ -28,6 +30,27 @@ export default function App() {
           ? <Diario user={user} setUser={setUser} />
           : <Sorteador key={aba} modo={aba} user={user} setUser={setUser} />}
       </main>
+
+      {servidor === 'acordando' && (
+        <div className="servidor-aviso" role="status">
+          <span className="servidor-spinner" />
+          Acordando o servidor… Ele roda num plano gratuito e dorme quando ninguém usa,
+          então a primeira visita pode levar até 1 minuto.
+        </div>
+      )}
+      {servidor === 'fora' && (
+        <div className="servidor-aviso erro" role="alert">
+          O servidor não respondeu. Tente recarregar a página em instantes.
+        </div>
+      )}
+
+      <footer className="rodape">
+        <p>
+          Pôsteres e imagens de <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer">TMDB</a>.
+          {' '}This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
+        <p>Projeto pessoal, sem vínculo com o Letterboxd.</p>
+      </footer>
     </div>
   );
 }
