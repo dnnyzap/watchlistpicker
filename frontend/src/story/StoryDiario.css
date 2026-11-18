@@ -1,0 +1,101 @@
+.story {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.story-moldura {
+  position: relative;
+  width: min(360px, 100%);
+  aspect-ratio: 9 / 16;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #141417;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+}
+.story-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.25s;
+}
+.story-moldura.carregando .story-canvas { opacity: 0.4; }
+.story-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.9rem;
+}
+
+.story-lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: min(280px, 100%);
+}
+.story-grupo {
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.story-grupo legend {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 0.6rem;
+}
+.story-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+}
+.story-check input { width: 1.05rem; height: 1.05rem; accent-color: #fff; cursor: pointer; }
+.story-cor {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+}
+.story-cor input {
+  width: 2.25rem; height: 2.25rem;
+  padding: 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+  background: none; cursor: pointer;
+}
+
+
+.story-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.story-btn {
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.story-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
+.story-btn.primario { background: #fff; color: #0b0b0d; border-color: #fff; }
+.story-btn.primario:hover:not(:disabled) { background: rgba(255,255,255,0.85); }
+.story-btn:disabled { opacity: 0.4; cursor: not-allowed; }

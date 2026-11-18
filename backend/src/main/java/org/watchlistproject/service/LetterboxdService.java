@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.watchlistproject.model.Diario;
 import org.watchlistproject.model.Filme;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -130,31 +132,36 @@ public class LetterboxdService {
     }
 
     // ============================================================
-    // Diario mensal (RSS; se o mes for mais antigo, tenta a pagina do diario)
+    // Diario de um mes ou de um ano inteiro (mes == null), via RSS.
+    // Se o mes for mais antigo que o RSS, tenta a pagina do diario.
     // ============================================================
-    public List<Filme> buscarDiario(String user, int ano, int mes) {
+    public Diario buscarDiario(String user, int ano, Integer mes) {
         String u = validarUsuario(user);
-        if (mes < 1 || mes > 12 || ano < 1900 || ano > 2100) {
+        if ((mes != null && (mes < 1 || mes > 12)) || ano < 1900 || ano > 2100) {
             throw new IllegalArgumentException("Mês ou ano inválido.");
         }
-        YearMonth alvo = YearMonth.of(ano, mes);
-        if (alvo.isAfter(YearMonth.now())) {
-            return List.of();
+        LocalDate inicio = mes == null ? LocalDate.of(ano, 1, 1) : LocalDate.of(ano, mes, 1);
+        LocalDate fim = mes == null ? inicio.plusYears(1) : inicio.plusMonths(1);
+        if (inicio.isAfter(LocalDate.now())) {
+            return new Diario(List.of(), false, null);
         }
 
         Feed feed = buscarRss(u);
-        List<EntradaRss> doMes = feed.entradas().stream()
-                .filter(e -> e.assistido() != null && YearMonth.from(e.assistido()).equals(alvo))
+        List<EntradaRss> doPeriodo = feed.entradas().stream()
+                .filter(e -> e.assistido() != null && !e.assistido().isBefore(inicio) && e.assistido().isBefore(fim))
                 .toList();
 
-        // O feed so tem as atividades mais recentes: se ele nao chega ate esse mes, o mes "vazio" pode ser falso.
-        boolean rssCobreOMes = feed.totalItens() < LIMITE_RSS || feed.entradas().stream()
-                .anyMatch(e -> e.assistido() != null && !YearMonth.from(e.assistido()).isAfter(alvo));
+        // O feed so tem os ~50 registros mais recentes. Se o mais antigo deles ja e de dentro (ou depois) do
+        // periodo, o comeco do periodo ficou de fora.
+        LocalDate maisAntigo = feed.entradas().stream().map(EntradaRss::assistido)
+                .filter(Objects::nonNull).min(LocalDate::compareTo).orElse(null);
+        boolean incompleto = feed.totalItens() >= LIMITE_RSS && (maisAntigo == null || !maisAntigo.isBefore(inicio));
 
-        if (doMes.isEmpty() && !rssCobreOMes) {
-            doMes = diarioPorScraping(u, alvo);
+        if (doPeriodo.isEmpty() && incompleto && mes != null) {
+            return new Diario(paraFilmes(diarioPorScraping(u, YearMonth.of(ano, mes))), false, null);
         }
-        return paraFilmes(doMes);
+        return new Diario(paraFilmes(doPeriodo), incompleto,
+                incompleto && maisAntigo != null ? maisAntigo.toString() : null);
     }
 
     private List<EntradaRss> diarioPorScraping(String u, YearMonth alvo) {
@@ -165,8 +172,8 @@ public class LetterboxdService {
         } catch (LetterboxdException e) {
             if (e.getStatus() == HttpStatus.NOT_FOUND) throw e;
             throw new LetterboxdException(HttpStatus.BAD_GATEWAY,
-                    "Esse mês é mais antigo que os ~50 filmes mais recentes do RSS, e o Letterboxd bloqueou "
-                            + "o acesso à página do diário. Tente um mês mais recente.", e);
+                    "Esse mês é mais antigo que os ~50 registros mais recentes que o Letterboxd libera. "
+                            + "Importe o export de dados do Letterboxd para ver qualquer mês.", e);
         }
 
         List<EntradaRss> entradas = new ArrayList<>();
@@ -186,7 +193,8 @@ public class LetterboxdService {
                 ano = Integer.parseInt(m.group(2));
             }
             if (!titulo.isBlank() && !slug.isEmpty()) {
-                entradas.add(new EntradaRss(titulo, ano, BASE + "/film/" + slug + "/", null, null, alvo.atDay(1)));
+                entradas.add(new EntradaRss(titulo, ano, BASE + "/film/" + slug + "/", null, null, alvo.atDay(1),
+                        null, false, false));
             }
         }
         return entradas;
@@ -229,8 +237,18 @@ public class LetterboxdService {
                 // sem data: entra no sorteio, mas nao no diario
             }
 
+            Double nota = null;
+            try {
+                String n = texto(item, "letterboxd|memberRating");
+                if (!n.isEmpty()) nota = Double.valueOf(n);
+            } catch (NumberFormatException ignored) {
+                // sem nota
+            }
+
             entradas.add(new EntradaRss(titulo, anoTxt.matches("\\d{4}") ? Integer.valueOf(anoTxt) : null,
-                    url, texto(item, "tmdb|movieId"), posterLetterboxd, assistido));
+                    url, texto(item, "tmdb|movieId"), posterLetterboxd, assistido, nota,
+                    "Yes".equalsIgnoreCase(texto(item, "letterboxd|rewatch")),
+                    "Yes".equalsIgnoreCase(texto(item, "letterboxd|memberLike"))));
         }
         return new Feed(entradas, itens.size());
     }
@@ -257,7 +275,8 @@ public class LetterboxdService {
         if (img.vazio()) img = tmdb.buscarPorTitulo(e.titulo(), e.ano());
         String poster = img.posterUrl() != null ? img.posterUrl() : e.posterLetterboxd();
         String banner = img.bannerUrl() != null ? img.bannerUrl() : poster;
-        return new Filme(e.titulo(), e.ano(), e.url(), poster, banner);
+        return new Filme(e.titulo(), e.ano(), e.url(), poster, banner,
+                e.assistido() == null ? null : e.assistido().toString(), e.nota(), e.revisto(), e.curtido());
     }
 
     // ============================================================
@@ -319,5 +338,6 @@ public class LetterboxdService {
     private record Feed(List<EntradaRss> entradas, int totalItens) { }
 
     private record EntradaRss(String titulo, Integer ano, String url, String tmdbId,
-                              String posterLetterboxd, LocalDate assistido) { }
+                              String posterLetterboxd, LocalDate assistido, Double nota,
+                              boolean revisto, boolean curtido) { }
 }

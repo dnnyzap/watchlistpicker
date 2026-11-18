@@ -7,3 +7,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 #root { min-height: 100vh; display: flex; flex-direction: column; }
+/* Botoes de opcao lado a lado (usado no Diario e no story) */
+.segmentado {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.segmentado button {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.segmentado button:hover { color: #fff; }
+.segmentado button.ativo { background: rgba(255,255,255,0.14); color: #fff; }

@@ -1,6 +1,6 @@
-# 🎬 Watchlist & Stuff
+# Watchlist & Stuff
 
-Sorteia filmes da sua watchlist do Letterboxd, sorteia entre os que você viu recentemente e mostra o diário de um mês, com pôster e banner vindos do TMDB.
+Sorteia filmes da sua watchlist do Letterboxd, sorteia entre os que você viu recentemente e gera um story (1080×1920) com os filmes do mês ou do ano, com notas, curtidos e revistos. Pôsteres e banners vêm do TMDB.
 
 ```
 backend/    Spring Boot 4.1 (Java 21) — scraping do Letterboxd + RSS + API do TMDB
@@ -44,14 +44,16 @@ Frontend em http://localhost, API em http://localhost:8080/api. O nginx do front
 |------|-----------|
 | `GET /api/sortear?user={u}` | Sorteia um filme da watchlist (todas as páginas) |
 | `GET /api/sortear-recente?user={u}` | Sorteia entre os filmes do RSS (os ~50 registros mais recentes) |
-| `GET /api/diario?user={u}&ano={a}&mes={m}` | Filmes registrados no diário naquele mês |
+| `GET /api/diario?user={u}&ano={a}&mes={m}` | Filmes do mês (sem `mes`: do ano). Retorna `{ filmes, incompleto, desde }` |
+| `POST /api/imagens` | Pôsteres para uma lista `[{ titulo, ano }]` (usado com o export) |
+| `GET /api/imagem?url=` | Repassa pôsteres do TMDB/Letterboxd, para o canvas do story poder exportar |
 | `GET /api/health` | Status, e se a chave do TMDB está configurada |
 
-Resposta de filme: `{ titulo, ano, url, posterUrl, bannerUrl }`. Erros: `{ "erro": "mensagem" }` com status 400, 404 ou 502.
+Resposta de filme: `{ titulo, ano, url, posterUrl, bannerUrl, data, nota, revisto, curtido }`. Erros: `{ "erro": "mensagem" }` com status 400, 404 ou 502.
 
 ## Limitações conhecidas
 
-- **Diário de meses antigos:** o RSS do Letterboxd só traz os ~50 registros mais recentes, e as páginas do diário (`/diary/for/ANO/MES/`) ficam atrás do Cloudflare, que bloqueia a maioria das requisições. Para meses fora do RSS, a API tenta a página e devolve um erro explicativo quando é bloqueada.
+- **Diário de meses antigos / ano inteiro:** o RSS do Letterboxd só traz os ~50 registros mais recentes, e as páginas de histórico ficam atrás do Cloudflare. Para qualquer período, importe o export de dados (letterboxd.com/settings/data → Export your data) na aba Diário. O .zip é lido no navegador e fica salvo só no seu navegador.
 - **Watchlist via scraping:** se o Letterboxd mudar o HTML, o sorteio da watchlist pode quebrar. Os seletores ficam em `LetterboxdService.postersDa()`.
 - A watchlist precisa ser pública.
 

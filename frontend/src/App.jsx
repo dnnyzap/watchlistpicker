@@ -5,9 +5,9 @@ import { useUsuario } from './hooks/useUsuario';
 import './App.css';
 
 const ABAS = [
-  { id: 'watchlist', rotulo: '🎬 Watchlist' },
-  { id: 'recente', rotulo: '📅 Recentes' },
-  { id: 'diario', rotulo: '📆 Diário' },
+  { id: 'watchlist', rotulo: 'Watchlist' },
+  { id: 'recente', rotulo: 'Recentes' },
+  { id: 'diario', rotulo: 'Diário' },
 ];
 
 export default function App() {

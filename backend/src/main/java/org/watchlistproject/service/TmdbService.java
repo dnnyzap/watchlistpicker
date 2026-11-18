@@ -14,6 +14,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 
 /** Busca poster e banner de filmes na API do TMDB. Nunca lanca excecao: sem imagem, devolve vazio. */
 @Service
@@ -27,6 +31,8 @@ public class TmdbService {
     private final String apiKey;
     private final boolean usaToken;
     private final Map<String, Imagens> cache = new ConcurrentHashMap<>();
+    /** O TMDB limita requisicoes por segundo; o diario do ano pode pedir centenas de uma vez. */
+    private final Semaphore simultaneas = new Semaphore(8);
 
     public TmdbService(@Value("${tmdb.api.key:}") String apiKey) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
@@ -58,7 +64,7 @@ public class TmdbService {
         if (!configurado() || tmdbId == null || !tmdbId.matches("\\d+")) {
             return Imagens.VAZIO;
         }
-        return cache.computeIfAbsent("id:" + tmdbId, k -> {
+        return comCache("id:" + tmdbId, () -> {
             try {
                 Filme f = client.get()
                         .uri(u -> comChave(u.path("/movie/{id}")).build(tmdbId))
@@ -75,7 +81,7 @@ public class TmdbService {
         if (!configurado() || titulo == null || titulo.isBlank()) {
             return Imagens.VAZIO;
         }
-        return cache.computeIfAbsent("q:" + titulo.toLowerCase() + ":" + ano, k -> {
+        return comCache("q:" + titulo.toLowerCase() + ":" + ano, () -> {
             try {
                 Imagens comAno = ano == null ? Imagens.VAZIO : pesquisar(titulo, ano);
                 return comAno.vazio() ? pesquisar(titulo, null) : comAno;
@@ -83,6 +89,40 @@ public class TmdbService {
                 return falha("\"" + titulo + "\"", e);
             }
         });
+    }
+
+    /** Busca varios filmes em paralelo, mantendo a ordem. */
+    public List<Imagens> buscarVarios(List<Pedido> pedidos) {
+        try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<Imagens>> futuros = pedidos.stream()
+                    .map(p -> exec.submit(() -> p == null ? Imagens.VAZIO : buscarPorTitulo(p.titulo(), p.ano())))
+                    .toList();
+            return futuros.stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    return Imagens.VAZIO;
+                }
+            }).toList();
+        }
+    }
+
+    private Imagens comCache(String chave, Supplier<Imagens> busca) {
+        Imagens salvo = cache.get(chave);
+        if (salvo != null) return salvo;
+        try {
+            simultaneas.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Imagens.VAZIO;
+        }
+        try {
+            Imagens img = busca.get();
+            cache.put(chave, img);
+            return img;
+        } finally {
+            simultaneas.release();
+        }
     }
 
     private Imagens pesquisar(String titulo, Integer ano) {
@@ -120,6 +160,8 @@ public class TmdbService {
             return posterUrl == null && bannerUrl == null;
         }
     }
+
+    public record Pedido(String titulo, Integer ano) { }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Busca(List<Filme> results) { }

@@ -21,7 +21,7 @@ export default function Sorteador({ modo, user, setUser }) {
       <div className="sorteador-overlay" />
       <div className="sorteador-content">
         <h1 className="sorteador-title">
-          {recente ? '📅 Sorteador de Recentes' : '🎬 Sorteador de Watchlist'}
+          {recente ? 'Sorteador de Recentes' : 'Sorteador de Watchlist'}
         </h1>
         <p className="sorteador-sub">
           {recente
@@ -40,11 +40,11 @@ export default function Sorteador({ modo, user, setUser }) {
             spellCheck={false}
           />
           <button type="submit" disabled={loading || !user.trim()} className="sorteador-btn">
-            {loading ? 'Sorteando...' : filme ? '🎲 Sortear outro' : '🎲 Sortear'}
+            {loading ? 'Sorteando...' : filme ? 'Sortear outro' : 'Sortear'}
           </button>
         </form>
 
-        {error && <div className="sorteador-error">⚠️ {error}</div>}
+        {error && <div className="sorteador-error">{error}</div>}
 
         {filme && (
           <div className={`filme-card${loading ? ' carregando' : ''}`}>
@@ -52,7 +52,7 @@ export default function Sorteador({ modo, user, setUser }) {
               {filme.posterUrl ? (
                 <img src={filme.posterUrl} alt={filme.titulo} className="filme-poster" />
               ) : (
-                <div className="filme-poster-placeholder">🎬</div>
+                <div className="filme-poster-placeholder">{filme.titulo}</div>
               )}
             </div>
             <div className="filme-info">
