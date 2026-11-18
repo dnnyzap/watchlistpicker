@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.watchlistproject.model.Detalhes;
 import org.watchlistproject.model.Diario;
 import org.watchlistproject.model.Filme;
 
@@ -43,6 +44,10 @@ public class LetterboxdService {
     private static final Pattern USUARIO = Pattern.compile("[A-Za-z0-9_]{1,30}");
     private static final Pattern NOME_COM_ANO = Pattern.compile("^(.*) \\((\\d{4})\\)$");
     private static final Pattern SLUG_NO_LINK = Pattern.compile("/film/([^/]+)/");
+    private static final Pattern LISTA = Pattern.compile(
+            "^(?:https?://)?(?:www\\.)?(?:letterboxd\\.com/)?([A-Za-z0-9_]{1,30})/list/([A-Za-z0-9_:-]{1,150})(?:/.*)?$");
+    private static final Pattern NUMERO = Pattern.compile("\\d+(?:\\.\\d+)?");
+    private static final Pattern DURACAO = Pattern.compile("(\\d+)[\\s\\u00a0]*mins?"); // &nbsp; vira
 
     private final TmdbService tmdb;
 
@@ -51,24 +56,53 @@ public class LetterboxdService {
     }
 
     // ============================================================
-    // Sorteio da watchlist (scraping das paginas da watchlist)
+    // Sorteio de qualquer grade paginada de posteres: watchlist, filmes assistidos de um perfil
+    // e listas publicas. Todas tem o mesmo HTML (LazyPoster + paginacao).
     // ============================================================
     public Filme sortearWatchlist(String user) {
         String u = validarUsuario(user);
-        String base = BASE + "/" + u + "/watchlist/page/";
+        return sortearDaGrade("/" + u + "/watchlist/",
+                "Usuário \"" + u + "\" não encontrado no Letterboxd.",
+                "A watchlist de " + u + " está vazia ou é privada.");
+    }
 
-        Document primeira = baixarHtml(base + "1/", u);
+    public Filme sortearAssistidos(String user) {
+        String u = validarUsuario(user);
+        return sortearDaGrade("/" + u + "/films/",
+                "Usuário \"" + u + "\" não encontrado no Letterboxd.",
+                u + " ainda não marcou nenhum filme como assistido.");
+    }
+
+    /** Aceita o link de uma lista (letterboxd.com/usuario/list/nome/) ou so "usuario/list/nome". */
+    public Filme sortearLista(String lista) {
+        Matcher m = LISTA.matcher(lista == null ? "" : lista.trim());
+        if (!m.matches()) {
+            throw new IllegalArgumentException(
+                    "Link de lista inválido. Use um link como letterboxd.com/usuario/list/nome-da-lista/.");
+        }
+        return sortearDaGrade("/" + m.group(1) + "/list/" + m.group(2) + "/",
+                "Lista não encontrada no Letterboxd.", "Essa lista está vazia.");
+    }
+
+    private Filme sortearDaGrade(String caminho, String naoEncontrado, String vazio) {
+        String base = BASE + caminho;
+        Document primeira = baixarHtml(base, naoEncontrado);
         Elements posters = postersDa(primeira);
         if (posters.isEmpty()) {
-            throw new LetterboxdException(HttpStatus.NOT_FOUND,
-                    "A watchlist de " + u + " está vazia ou é privada.");
+            throw new LetterboxdException(HttpStatus.NOT_FOUND, vazio);
         }
 
         int pagina = ThreadLocalRandom.current().nextInt(ultimaPagina(primeira)) + 1;
         if (pagina > 1) {
-            Elements daPagina = postersDa(baixarHtml(base + pagina + "/", u));
-            if (!daPagina.isEmpty()) {
-                posters = daPagina;
+            try {
+                Elements daPagina = postersDa(baixarHtml(base + "page/" + pagina + "/", naoEncontrado));
+                if (!daPagina.isEmpty()) {
+                    posters = daPagina;
+                }
+            } catch (LetterboxdException e) {
+                // A Cloudflare do Letterboxd bloqueia algumas paginas (ex.: /usuario/films/page/2/).
+                // Sorteia da primeira pagina em vez de falhar.
+                log.info("Pagina {} de {} indisponivel, usando a primeira", pagina, caminho);
             }
         }
 
@@ -114,8 +148,87 @@ public class LetterboxdService {
                     "Não consegui ler o filme sorteado. O Letterboxd pode ter mudado o layout da página.");
         }
 
-        TmdbService.Imagens img = tmdb.buscarPorTitulo(titulo, ano);
-        return new Filme(titulo, ano, link.startsWith("http") ? link : BASE + link, img.posterUrl(), img.bannerUrl());
+        String url = link.startsWith("http") ? link : BASE + link;
+        return comDetalhes(titulo, ano, url, slug.isEmpty() ? slugDoLink(url) : slug, null, null);
+    }
+
+    // ============================================================
+    // Pagina do filme: sinopse, diretor, nota media, duracao, generos, pais e o id do TMDB.
+    // Se ela falhar, o sorteio continua so com titulo, ano e imagens.
+    // ============================================================
+    private Filme comDetalhes(String titulo, Integer ano, String url, String slug, String tmdbId,
+                              String posterReserva) {
+        PaginaFilme pagina = slug.isEmpty() ? PaginaFilme.VAZIA : lerPaginaFilme(slug);
+
+        String id = tmdbId != null ? tmdbId : pagina.tmdbId();
+        TmdbService.Imagens img = tmdb.buscarPorId(id);
+        if (img.vazio()) img = tmdb.buscarPorTitulo(titulo, ano);
+        String poster = img.posterUrl() != null ? img.posterUrl() : posterReserva;
+        String banner = img.bannerUrl() != null ? img.bannerUrl()
+                : pagina.banner() != null ? pagina.banner() : poster;
+
+        return new Filme(titulo, ano, url, poster, banner, null, null, false, false, pagina.detalhes());
+    }
+
+    private PaginaFilme lerPaginaFilme(String slug) {
+        Document doc;
+        try {
+            doc = conectar(BASE + "/film/" + slug + "/").header("Accept", "text/html").get();
+        } catch (IOException e) {
+            log.warn("Não consegui ler a página do filme {}: {}", slug, e.toString());
+            return PaginaFilme.VAZIA;
+        }
+
+        Element comId = doc.selectFirst("[data-tmdb-id]");
+        String tmdbId = comId == null ? null : vazioParaNulo(comId.attr("data-tmdb-id"));
+
+        String diretor = null;
+        Double notaMedia = null;
+        for (int i = 1; i <= 2; i++) {
+            String rotulo = meta(doc, "twitter:label" + i);
+            String valor = meta(doc, "twitter:data" + i);
+            if (rotulo == null || valor == null) continue;
+            if (rotulo.startsWith("Directed")) {
+                diretor = valor;
+            } else if (rotulo.startsWith("Average")) {
+                Matcher n = NUMERO.matcher(valor);
+                if (n.find()) notaMedia = Double.valueOf(n.group());
+            }
+        }
+
+        Integer duracao = null;
+        Element rodape = doc.selectFirst("p.text-footer, p.text-footnote");
+        if (rodape != null) {
+            Matcher d = DURACAO.matcher(rodape.text());
+            if (d.find()) duracao = Integer.valueOf(d.group(1));
+        }
+
+        List<String> generos = doc.select("#tab-genres a[href^=/films/genre/]").eachText();
+        if (generos.isEmpty()) generos = doc.select("a[href^=/films/genre/]").eachText();
+        Element pais = doc.selectFirst("a[href^=/films/country/]");
+
+        Element tagline = doc.selectFirst(".tagline");
+        Element sinopse = doc.selectFirst(".review .truncate p, section.production-synopsis p");
+        String textoSinopse = sinopse != null ? sinopse.text() : meta(doc, "og:description");
+
+        Detalhes detalhes = new Detalhes(vazioParaNulo(textoSinopse),
+                tagline == null ? null : vazioParaNulo(tagline.text()), diretor, duracao, notaMedia,
+                generos.stream().distinct().limit(3).toList(),
+                pais == null ? null : vazioParaNulo(pais.text()));
+        return new PaginaFilme(tmdbId, vazioParaNulo(meta(doc, "twitter:image")), detalhes);
+    }
+
+    private static String meta(Document doc, String nome) {
+        Element el = doc.selectFirst("meta[name=" + nome + "], meta[property=" + nome + "]");
+        return el == null ? null : vazioParaNulo(el.attr("content"));
+    }
+
+    private static String vazioParaNulo(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    private record PaginaFilme(String tmdbId, String banner, Detalhes detalhes) {
+        static final PaginaFilme VAZIA = new PaginaFilme(null, null, null);
     }
 
     // ============================================================
@@ -128,7 +241,8 @@ public class LetterboxdService {
             throw new LetterboxdException(HttpStatus.NOT_FOUND,
                     u + " não registrou nenhum filme recentemente.");
         }
-        return paraFilme(recentes.get(ThreadLocalRandom.current().nextInt(recentes.size())));
+        EntradaRss e = recentes.get(ThreadLocalRandom.current().nextInt(recentes.size()));
+        return comDetalhes(e.titulo(), e.ano(), e.url(), slugDoLink(e.url()), e.tmdbId(), e.posterLetterboxd());
     }
 
     // ============================================================
@@ -168,7 +282,7 @@ public class LetterboxdService {
         String url = String.format("%s/%s/diary/for/%d/%02d/", BASE, u, alvo.getYear(), alvo.getMonthValue());
         Document doc;
         try {
-            doc = baixarHtml(url, u);
+            doc = baixarHtml(url, usuarioNaoEncontrado(u));
         } catch (LetterboxdException e) {
             if (e.getStatus() == HttpStatus.NOT_FOUND) throw e;
             throw new LetterboxdException(HttpStatus.BAD_GATEWAY,
@@ -208,7 +322,7 @@ public class LetterboxdService {
         try {
             xml = conectar(BASE + "/" + u + "/rss/").parser(Parser.xmlParser()).get();
         } catch (IOException e) {
-            throw erroDeRede(e, u);
+            throw erroDeRede(e, usuarioNaoEncontrado(u));
         }
 
         Elements itens = xml.select("item");
@@ -297,18 +411,23 @@ public class LetterboxdService {
                 .timeout(TIMEOUT_MS);
     }
 
-    private Document baixarHtml(String url, String u) {
+    /** {@code naoEncontrado}: mensagem para quando o Letterboxd responde 404. */
+    private Document baixarHtml(String url, String naoEncontrado) {
         try {
             return conectar(url).header("Accept", "text/html").get();
         } catch (IOException e) {
-            throw erroDeRede(e, u);
+            throw erroDeRede(e, naoEncontrado);
         }
     }
 
-    private LetterboxdException erroDeRede(IOException e, String u) {
+    private static String usuarioNaoEncontrado(String u) {
+        return "Usuário \"" + u + "\" não encontrado no Letterboxd.";
+    }
+
+    private LetterboxdException erroDeRede(IOException e, String naoEncontrado) {
         if (e instanceof HttpStatusException h) {
             if (h.getStatusCode() == 404) {
-                return new LetterboxdException(HttpStatus.NOT_FOUND, "Usuário \"" + u + "\" não encontrado no Letterboxd.", e);
+                return new LetterboxdException(HttpStatus.NOT_FOUND, naoEncontrado, e);
             }
             log.warn("Letterboxd respondeu HTTP {} para {}", h.getStatusCode(), h.getUrl());
             return new LetterboxdException(HttpStatus.BAD_GATEWAY,

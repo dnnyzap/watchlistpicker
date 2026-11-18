@@ -6,13 +6,12 @@ import { useServidor } from './hooks/useServidor';
 import './App.css';
 
 const ABAS = [
-  { id: 'watchlist', rotulo: 'Watchlist' },
-  { id: 'recente', rotulo: 'Recentes' },
+  { id: 'sortear', rotulo: 'Sortear' },
   { id: 'diario', rotulo: 'Diário' },
 ];
 
 export default function App() {
-  const [aba, setAba] = useState('watchlist');
+  const [aba, setAba] = useState('sortear');
   const [user, setUser] = useUsuario();
   const servidor = useServidor();
 
@@ -28,7 +27,7 @@ export default function App() {
       <main className="main">
         {aba === 'diario'
           ? <Diario user={user} setUser={setUser} />
-          : <Sorteador key={aba} modo={aba} user={user} setUser={setUser} />}
+          : <Sorteador user={user} setUser={setUser} />}
       </main>
 
       {servidor === 'acordando' && (

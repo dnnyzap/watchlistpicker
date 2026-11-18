@@ -1,4 +1,5 @@
-// Dados de exemplo, para quem nao tem conta no Letterboxd (ou se o Letterboxd bloquear o servidor).
+// Diario de exemplo, para quem nao tem conta no Letterboxd (ou se o Letterboxd bloquear o servidor).
+// O sorteio nao usa mais isto: sem conta, ele sorteia de listas publicas reais do Letterboxd.
 // Os filmes sao reais; notas, datas e marcas sao ficticias. Os posteres vem do TMDB pelo backend.
 
 /** Usuario real para o botao "Testar com @...". Defina VITE_USUARIO_EXEMPLO no deploy. */
@@ -70,16 +71,6 @@ const DIARIO = [
   ['Drive', 2011, 3.5, true, false],
 ];
 
-const WATCHLIST = [
-  ['Seven Samurai', 1954], ['Tokyo Story', 1953], ['Stalker', 1979], ['Mulholland Drive', 2001],
-  ['Yi Yi', 2000], ['Close-Up', 1990], ['Burning', 2018], ['Memories of Murder', 2003],
-  ['The Handmaiden', 2016], ['Persona', 1966], ['8½', 1963], ['Cléo from 5 to 7', 1962],
-  ['Rashomon', 1950], ['Barry Lyndon', 1975], ['Heat', 1995], ['Magnolia', 1999],
-  ['There Will Be Blood', 2007], ['Werckmeister Harmonies', 2000], ['Pather Panchali', 1955],
-  ['The Red Shoes', 1948], ['Black Girl', 1966], ['Cinema Paradiso', 1988], ['Pixote', 1980],
-  ['Entranced Earth', 1967], ['Ran', 1985],
-];
-
 const urlBusca = (titulo) => `https://letterboxd.com/search/films/${encodeURIComponent(titulo)}/`;
 
 function dataLocal(diasAtras) {
@@ -101,12 +92,4 @@ export function diarioDemo() {
     posterUrl: null,
     bannerUrl: null,
   })).reverse();
-}
-
-const sortear = (lista) => lista[Math.floor(Math.random() * lista.length)];
-
-/** Um filme de exemplo, sem imagens (o chamador busca no TMDB). */
-export function sortearDemo(modo) {
-  const [titulo, ano] = sortear(modo === 'recente' ? DIARIO : WATCHLIST);
-  return { titulo, ano, url: urlBusca(titulo), posterUrl: null, bannerUrl: null };
 }

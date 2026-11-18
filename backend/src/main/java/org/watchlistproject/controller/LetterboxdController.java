@@ -38,6 +38,17 @@ public class LetterboxdController {
         return letterboxd.sortearRecente(user);
     }
 
+    @GetMapping("/sortear-assistidos")
+    public Filme sortearAssistidos(@RequestParam String user) {
+        return letterboxd.sortearAssistidos(user);
+    }
+
+    /** {@code lista}: link de uma lista publica do Letterboxd, ou "usuario/list/nome". */
+    @GetMapping("/sortear-lista")
+    public Filme sortearLista(@RequestParam String lista) {
+        return letterboxd.sortearLista(lista);
+    }
+
     /** Sem {@code mes}, devolve o ano inteiro. */
     @GetMapping("/diario")
     public Diario diario(@RequestParam String user, @RequestParam int ano,

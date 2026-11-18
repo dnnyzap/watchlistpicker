@@ -1,6 +1,6 @@
 # Watchlist & Stuff
 
-Sorteia filmes da sua watchlist do Letterboxd, sorteia entre os que você viu recentemente e gera um story (1080×1920) com os filmes do mês ou do ano, com notas, curtidos e revistos. Pôsteres e banners vêm do TMDB.
+Sorteia filmes da sua watchlist do Letterboxd, dos filmes que você já viu, dos seus registros recentes ou de qualquer lista pública (com sinopse, diretor, duração, gêneros e nota média tirados da página do filme), e gera um story (1080×1920) com os filmes do mês ou do ano, com notas, curtidos e revistos. Pôsteres e banners vêm do TMDB.
 
 ```
 backend/    Spring Boot 4.1 (Java 21) — scraping do Letterboxd + RSS + API do TMDB
@@ -44,6 +44,8 @@ Frontend em http://localhost, API em http://localhost:8080/api. O nginx do front
 |------|-----------|
 | `GET /api/sortear?user={u}` | Sorteia um filme da watchlist (todas as páginas) |
 | `GET /api/sortear-recente?user={u}` | Sorteia entre os filmes do RSS (os ~50 registros mais recentes) |
+| `GET /api/sortear-assistidos?user={u}` | Sorteia entre os filmes marcados como assistidos |
+| `GET /api/sortear-lista?lista={link}` | Sorteia de uma lista pública (`letterboxd.com/usuario/list/nome/` ou `usuario/list/nome`) |
 | `GET /api/diario?user={u}&ano={a}&mes={m}` | Filmes do mês (sem `mes`: do ano). Retorna `{ filmes, incompleto, desde }` |
 | `POST /api/imagens` | Pôsteres para uma lista `[{ titulo, ano }]` (usado com o export) |
 | `GET /api/imagem?url=` | Repassa pôsteres do TMDB/Letterboxd, para o canvas do story poder exportar |
@@ -56,11 +58,14 @@ Resposta de filme: `{ titulo, ano, url, posterUrl, bannerUrl, data, nota, revist
 - **Diário de meses antigos / ano inteiro:** o RSS do Letterboxd só traz os ~50 registros mais recentes, e as páginas de histórico ficam atrás do Cloudflare. Para qualquer período, importe o export de dados (letterboxd.com/settings/data → Export your data) na aba Diário. O .zip é lido no navegador e fica salvo só no seu navegador.
 - **Watchlist via scraping:** se o Letterboxd mudar o HTML, o sorteio da watchlist pode quebrar. Os seletores ficam em `LetterboxdService.postersDa()`.
 - A watchlist precisa ser pública.
-- **Servidores na nuvem:** o Letterboxd fica atrás do Cloudflare, que pode bloquear IPs de datacenter. Se isso acontecer, o botão "Ver com dados de exemplo" continua funcionando (só depende do TMDB).
+- **Assistidos:** a Cloudflare bloqueia as páginas 2+ de `/usuario/films/`, então quando a página sorteada é bloqueada o sorteio usa a primeira (os ~72 filmes marcados mais recentemente).
+- **Detalhes do filme:** vêm da página `letterboxd.com/film/{slug}/`. Se ela falhar, o sorteio sai só com título, ano e imagens.
+- **Servidores na nuvem:** o Letterboxd fica atrás do Cloudflare, que pode bloquear IPs de datacenter. Se isso acontecer, o diário de exemplo continua funcionando (só depende do TMDB).
 
 ## Dados de exemplo
 
-Cada aba tem um botão **"Não tem Letterboxd? Ver com dados de exemplo"**, que usa filmes de `frontend/src/demo/dados.js` (filmes reais, notas e datas fictícias, datas relativas a hoje). Os pôsteres vêm do TMDB pelo backend.
+No sorteio, quem não tem conta escolhe uma das listas públicas do Letterboxd (Top 500, mais fãs, animação, 1001 filmes, terror). Elas ficam em `COLECOES`, em `frontend/src/components/Sorteador.jsx`.
+No Diário, o botão **"Não tem Letterboxd? Ver com dados de exemplo"** usa filmes de `frontend/src/demo/dados.js` (filmes reais, notas e datas fictícias, datas relativas a hoje). Os pôsteres vêm do TMDB pelo backend.
 Se `VITE_USUARIO_EXEMPLO` estiver definido, aparece também um botão **"Testar com @usuario"**, que busca os dados reais desse perfil.
 
 ## Deploy (grátis: Render + Vercel)
